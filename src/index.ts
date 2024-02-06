@@ -25,8 +25,28 @@ export interface Env {
 	// MY_QUEUE: Queue;
 }
 
+const SCRIPT_NAME = '/pap/script.js';
+const ENDPOINT = '/pap/event';
+
+const SCRIPT_WITHOUT_EXTENSION = SCRIPT_NAME.replace('.js', '');
+
 export default {
 	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-		return new Response('Hello World!');
+		const pathname = new URL(request.url).pathname;
+		const [baseUri, ...extensions] = pathname.split('.');
+
+		if (baseUri.endsWith(SCRIPT_WITHOUT_EXTENSION)) {
+			let response = await caches.default.match(request);
+			if (!response) {
+				response = await fetch('https://plausible.io/js/plausible.' + extensions.join('.'));
+				ctx.waitUntil(caches.default.put(request, response.clone()));
+			}
+			return response;
+		} else if (pathname.endsWith(ENDPOINT)) {
+			const requestClone = new Request(request);
+			requestClone.headers.delete('cookie');
+			return fetch('https://plausible.io/api/event', requestClone);
+		}
+		return new Response(null, { status: 404 });
 	},
 };
